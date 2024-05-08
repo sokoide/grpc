@@ -10,6 +10,7 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/keepalive"
+	tlsh "sokoide.com/grpc/pkg/tlshelper"
 	pb "sokoide.com/grpc/proto"
 )
 
@@ -18,16 +19,29 @@ var ()
 type options struct {
 	port int
 	ka   bool
+	tlso tlsh.TlsOptions
 }
 
 var opts options = options{
 	port: 50051,
 	ka:   true,
+	tlso: tlsh.TlsOptions{
+		Tls:          "none",
+		Cert:         "cert.pem",
+		Key:          "key.pem",
+		Cacert:       "cacert.pem",
+		AllowedUsers: "",
+	},
 }
 
 func parseFlags() {
 	flag.IntVar(&opts.port, "port", opts.port, "The server port")
 	flag.BoolVar(&opts.ka, "keepalive", opts.ka, "keepalive")
+	flag.StringVar(&opts.tlso.Tls, "tls", opts.tlso.Tls, "none|oneway|mtls")
+	flag.StringVar(&opts.tlso.Cert, "cert", opts.tlso.Cert, "full path of cert")
+	flag.StringVar(&opts.tlso.Key, "key", opts.tlso.Key, "full path of key")
+	flag.StringVar(&opts.tlso.Cacert, "cacert", opts.tlso.Cacert, "full path of CA cert")
+	flag.StringVar(&opts.tlso.AllowedUsers, "allowedUsers", opts.tlso.AllowedUsers, "comma separated allowed users")
 	flag.Parse()
 }
 
@@ -58,6 +72,17 @@ func main() {
 			PermitWithoutStream: true,
 		})
 		so = append(so, kaPolicy)
+	}
+
+	switch opts.tlso.Tls {
+	case "oneway":
+		creds := tlsh.LoadKeyPairSingle(opts.tlso)
+		transportSecurityOpt := grpc.Creds(creds)
+		so = append(so, transportSecurityOpt)
+	case "mtls":
+		creds := tlsh.LoadKeyPairMutual(opts.tlso)
+		transportSecurityOpt := grpc.Creds(creds)
+		so = append(so, transportSecurityOpt)
 	}
 
 	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", opts.port))

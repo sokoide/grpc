@@ -10,6 +10,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/keepalive"
+	tlsh "sokoide.com/grpc/pkg/tlshelper"
 	pb "sokoide.com/grpc/proto"
 )
 
@@ -24,6 +25,7 @@ type options struct {
 	loops int
 	gos   int
 	ka    bool
+	tlso  tlsh.TlsOptions
 }
 
 var opts options = options{
@@ -33,6 +35,13 @@ var opts options = options{
 	loops: 10,
 	gos:   10,
 	ka:    true,
+	tlso: tlsh.TlsOptions{
+		Tls:          "none",
+		Cert:         "cert.pem",
+		Key:          "key.pem",
+		Cacert:       "cacert.pem",
+		AllowedUsers: "",
+	},
 }
 
 var (
@@ -64,6 +73,10 @@ func parseFlags() {
 	flag.IntVar(&opts.loops, "loops", opts.loops, "loops")
 	flag.IntVar(&opts.gos, "gos", opts.gos, "go routines")
 	flag.BoolVar(&opts.ka, "keepalive", opts.ka, "keepalive")
+	flag.StringVar(&opts.tlso.Tls, "tls", opts.tlso.Tls, "none|oneway|mtls")
+	flag.StringVar(&opts.tlso.Cert, "cert", opts.tlso.Cert, "full path of cert")
+	flag.StringVar(&opts.tlso.Key, "key", opts.tlso.Key, "full path of key")
+	flag.StringVar(&opts.tlso.Cacert, "cacert", opts.tlso.Cacert, "full path of CA cert")
 	flag.Parse()
 }
 
@@ -82,6 +95,22 @@ func main() {
 		do = append(do, ka)
 	}
 	do = append(do, grpc.WithTransportCredentials(insecure.NewCredentials()))
+
+	var transportSecurityOpt grpc.DialOption
+
+	switch opts.tlso.Tls {
+	case "none":
+		transportSecurityOpt = grpc.WithInsecure()
+	case "oneway":
+		creds := tlsh.LoadKeyPairSingle(opts.tlso)
+		transportSecurityOpt = grpc.WithTransportCredentials(creds)
+	case "mtls":
+		creds := tlsh.LoadKeyPairMutual(opts.tlso)
+		transportSecurityOpt = grpc.WithTransportCredentials(creds)
+	default:
+		panic("Error while setting up tls")
+	}
+	do = append(do, transportSecurityOpt)
 
 	// Set up a connection to the server.
 	conn, err := grpc.Dial(
