@@ -9,12 +9,27 @@ import (
 	"time"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	pb "sokoide.com/grpc/proto"
 )
 
-var (
-	port = flag.Int("port", 50051, "The server port")
-)
+var ()
+
+type options struct {
+	port int
+	ka   bool
+}
+
+var opts options = options{
+	port: 50051,
+	ka:   true,
+}
+
+func parseFlags() {
+	flag.IntVar(&opts.port, "port", opts.port, "The server port")
+	flag.BoolVar(&opts.ka, "keepalive", opts.ka, "keepalive")
+	flag.Parse()
+}
 
 type server struct {
 	pb.UnimplementedGreeterServer
@@ -33,12 +48,24 @@ func (s *server) Slow(ctx context.Context, in *pb.SlowRequest) (*pb.SlowReply, e
 }
 
 func main() {
-	flag.Parse()
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", *port))
+	parseFlags()
+
+	var so []grpc.ServerOption
+
+	if opts.ka {
+		kaPolicy := grpc.KeepaliveEnforcementPolicy(keepalive.EnforcementPolicy{
+			MinTime:             5 * time.Second,
+			PermitWithoutStream: true,
+		})
+		so = append(so, kaPolicy)
+	}
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", opts.port))
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
-	s := grpc.NewServer()
+
+	s := grpc.NewServer(so...)
 	pb.RegisterGreeterServer(s, &server{})
 	log.Printf("server listening at %v", lis.Addr())
 	if err := s.Serve(lis); err != nil {
