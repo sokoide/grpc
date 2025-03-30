@@ -59,11 +59,34 @@ func callSlow(id int, wg *sync.WaitGroup, c pb.GreeterClient, loops int) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		r2, err := c.Slow(ctx, &pb.SlowRequest{Ms: opts.ms})
+		// r2, err := c.Slow(ctx, &pb.SlowRequest{Ms: opts.ms})
+		_, err := c.Slow(ctx, &pb.SlowRequest{Ms: opts.ms})
 		chkerr(err)
-		log.Printf("[%04d] Slow: %s", id, r2.GetMessage())
+		// log.Printf("[%04d] Slow: %s", id, r2.GetMessage())
 	}
 	wg.Done()
+}
+
+func callPush(id int, wg *sync.WaitGroup, c pb.GreeterClient, loops int) {
+	for i := 0; i < loops; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+
+		// r2, err := c.Push(ctx, &pb.PushRequest{Data: getRandomString(4096)})
+		_, err := c.Push(ctx, &pb.PushRequest{Data: getRandomString(4096)})
+		chkerr(err)
+		// log.Printf("[%04d] Push: %s", id, r2.GetMessage())
+	}
+	wg.Done()
+}
+
+func getRandomString(n int) string {
+	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+	b := make([]byte, n)
+	for i := range b {
+		b[i] = letters[i%len(letters)]
+	}
+	return string(b)
 }
 
 func parseFlags() {
@@ -113,7 +136,7 @@ func main() {
 	do = append(do, transportSecurityOpt)
 
 	// Set up a connection to the server.
-	conn, err := grpc.Dial(
+	conn, err := grpc.NewClient(
 		opts.addr,
 		do...,
 	)
@@ -126,14 +149,31 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 
+	// Hello
 	r, err := c.SayHello(ctx, &pb.HelloRequest{Name: opts.name})
 	chkerr(err)
 	log.Printf("Greeting: %s", r.GetMessage())
 
+	// Slow
 	var wg sync.WaitGroup
+	var start, end time.Time
+
+	start = time.Now()
 	for i := 0; i < opts.gos; i++ {
 		wg.Add(1)
 		go callSlow(i, &wg, c, opts.loops)
 	}
 	wg.Wait()
+	end = time.Now()
+	log.Printf("Slow: %d ms", end.Sub(start).Milliseconds())
+
+	// Push
+	start = time.Now()
+	for i := 0; i < opts.gos; i++ {
+		wg.Add(1)
+		go callPush(i, &wg, c, opts.loops)
+	}
+	wg.Wait()
+	end = time.Now()
+	log.Printf("Push: %d ms", end.Sub(start).Milliseconds())
 }

@@ -61,6 +61,11 @@ func (s *server) Slow(ctx context.Context, in *pb.SlowRequest) (*pb.SlowReply, e
 	return &pb.SlowReply{Message: fmt.Sprintf("Slept %d ms", ms)}, nil
 }
 
+func (s *server) Push(ctx context.Context, in *pb.PushRequest) (*pb.PushReply, error) {
+	log.Printf("Received: %d bytes", len(in.GetData()))
+	return &pb.PushReply{Message: fmt.Sprintf("%d bytes received", len(in.GetData()))}, nil
+}
+
 func main() {
 	parseFlags()
 

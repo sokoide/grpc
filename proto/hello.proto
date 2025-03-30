@@ -7,6 +7,7 @@ package helloworld;
 service Greeter {
   rpc SayHello (HelloRequest) returns (HelloReply) {}
   rpc Slow (SlowRequest) returns (SlowReply) {}
+  rpc Push (PushRequest) returns (PushReply) {}
 }
 
 message HelloRequest {
@@ -24,3 +25,12 @@ message SlowRequest {
 message SlowReply {
   string message = 1;
 }
+
+message PushRequest {
+  string data = 1;
+}
+
+message PushReply {
+  string message = 1;
+}
+
