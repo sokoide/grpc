@@ -19,22 +19,24 @@ const (
 )
 
 type options struct {
-	addr  string
-	name  string
-	ms    int64
-	loops int
-	gos   int
-	ka    bool
-	tlso  tlsh.TlsOptions
+	addr    string
+	name    string
+	ms      int64
+	loops   int
+	gos     int
+	ka      bool
+	pushlen int
+	tlso    tlsh.TlsOptions
 }
 
 var opts options = options{
-	addr:  "localhost:50051",
-	name:  "defaultName",
-	ms:    100,
-	loops: 10,
-	gos:   10,
-	ka:    true,
+	addr:    "localhost:50051",
+	name:    "defaultName",
+	ms:      100,
+	loops:   10,
+	gos:     10,
+	ka:      true,
+	pushlen: 4096,
 	tlso: tlsh.TlsOptions{
 		Tls:          "none",
 		Cert:         "cert.pem",
@@ -72,8 +74,8 @@ func callPush(id int, wg *sync.WaitGroup, c pb.GreeterClient, loops int) {
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 
-		// r2, err := c.Push(ctx, &pb.PushRequest{Data: getRandomString(4096)})
-		_, err := c.Push(ctx, &pb.PushRequest{Data: getRandomString(4096)})
+		// r2, err := c.Push(ctx, &pb.PushRequest{Data: getRandomString(opts.pushlen)})
+		_, err := c.Push(ctx, &pb.PushRequest{Data: getRandomString(opts.pushlen)})
 		chkerr(err)
 		// log.Printf("[%04d] Push: %s", id, r2.GetMessage())
 	}
@@ -96,6 +98,7 @@ func parseFlags() {
 	flag.IntVar(&opts.loops, "loops", opts.loops, "loops")
 	flag.IntVar(&opts.gos, "gos", opts.gos, "go routines")
 	flag.BoolVar(&opts.ka, "keepalive", opts.ka, "keepalive")
+	flag.IntVar(&opts.pushlen, "pushlen", opts.pushlen, "push string length")
 	flag.StringVar(&opts.tlso.Tls, "tls", opts.tlso.Tls, "none|oneway|mtls")
 	flag.StringVar(&opts.tlso.Cert, "cert", opts.tlso.Cert, "full path of cert")
 	flag.StringVar(&opts.tlso.Key, "key", opts.tlso.Key, "full path of key")
@@ -154,18 +157,19 @@ func main() {
 	chkerr(err)
 	log.Printf("Greeting: %s", r.GetMessage())
 
-	// Slow
 	var wg sync.WaitGroup
 	var start, end time.Time
 
-	start = time.Now()
-	for i := 0; i < opts.gos; i++ {
-		wg.Add(1)
-		go callSlow(i, &wg, c, opts.loops)
-	}
-	wg.Wait()
-	end = time.Now()
-	log.Printf("Slow: %d ms", end.Sub(start).Milliseconds())
+	// Slow
+	//
+	// start = time.Now()
+	// for i := 0; i < opts.gos; i++ {
+	// 	wg.Add(1)
+	// 	go callSlow(i, &wg, c, opts.loops)
+	// }
+	// wg.Wait()
+	// end = time.Now()
+	// log.Printf("Slow: %d ms", end.Sub(start).Milliseconds())
 
 	// Push
 	start = time.Now()
