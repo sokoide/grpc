@@ -19,24 +19,27 @@ const (
 )
 
 type options struct {
-	addr    string
-	name    string
-	ms      int64
-	loops   int
-	gos     int
-	ka      bool
-	pushlen int
-	tlso    tlsh.TlsOptions
+	addr             string
+	name             string
+	ms               int64
+	loops            int
+	gos              int
+	ka               bool
+	pushlen          int
+	tlso             tlsh.TlsOptions
+	deadline         string
+	durationDeadline time.Duration
 }
 
 var opts options = options{
-	addr:    "localhost:50051",
-	name:    "defaultName",
-	ms:      100,
-	loops:   10,
-	gos:     10,
-	ka:      true,
-	pushlen: 4096,
+	addr:     "localhost:50051",
+	name:     "defaultName",
+	ms:       100,
+	loops:    10,
+	gos:      10,
+	ka:       true,
+	pushlen:  4096,
+	deadline: "1s",
 	tlso: tlsh.TlsOptions{
 		Tls:          "none",
 		Cert:         "cert.pem",
@@ -58,7 +61,7 @@ func chkerr(err error) {
 
 func callSlow(id int, wg *sync.WaitGroup, c pb.GreeterClient, loops int) {
 	for i := 0; i < loops; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), opts.durationDeadline)
 		defer cancel()
 
 		// r2, err := c.Slow(ctx, &pb.SlowRequest{Ms: opts.ms})
@@ -71,7 +74,7 @@ func callSlow(id int, wg *sync.WaitGroup, c pb.GreeterClient, loops int) {
 
 func callPush(id int, wg *sync.WaitGroup, c pb.GreeterClient, loops int) {
 	for i := 0; i < loops; i++ {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), opts.durationDeadline)
 		defer cancel()
 
 		// r2, err := c.Push(ctx, &pb.PushRequest{Data: getRandomString(opts.pushlen)})
@@ -99,6 +102,7 @@ func parseFlags() {
 	flag.IntVar(&opts.gos, "gos", opts.gos, "go routines")
 	flag.BoolVar(&opts.ka, "keepalive", opts.ka, "keepalive")
 	flag.IntVar(&opts.pushlen, "pushlen", opts.pushlen, "push string length")
+	flag.StringVar(&opts.deadline, "deadline", opts.deadline, "grpc deadline")
 	flag.StringVar(&opts.tlso.Tls, "tls", opts.tlso.Tls, "none|oneway|mtls")
 	flag.StringVar(&opts.tlso.Cert, "cert", opts.tlso.Cert, "full path of cert")
 	flag.StringVar(&opts.tlso.Key, "key", opts.tlso.Key, "full path of key")
@@ -107,6 +111,8 @@ func parseFlags() {
 }
 
 func main() {
+	var err error
+
 	parseFlags()
 
 	var do []grpc.DialOption
@@ -138,6 +144,11 @@ func main() {
 	}
 	do = append(do, transportSecurityOpt)
 
+	// Convert
+	opts.durationDeadline, err = time.ParseDuration(opts.deadline)
+	chkerr(err)
+	log.Printf("deadline: %v\n", opts.deadline)
+
 	// Set up a connection to the server.
 	conn, err := grpc.NewClient(
 		opts.addr,
@@ -149,7 +160,7 @@ func main() {
 	c := pb.NewGreeterClient(conn)
 
 	// Contact the server and print out its response.
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), opts.durationDeadline)
 	defer cancel()
 
 	// Hello
